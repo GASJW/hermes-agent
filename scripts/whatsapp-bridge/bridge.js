@@ -39,6 +39,7 @@ import {
   createVersionResolver,
   buildLocationPayload,
   buildButtonsSendPayload,
+  buildNativeFlowRelayNodes,
   buildTextSendPayload,
   createBoundedMessageStore,
   extractBridgeEvent,
@@ -177,6 +178,10 @@ function sendButtonsWithTimeout(chatId, payload, options = {}, timeoutMs = SEND_
         sock.relayMessage(chatId, fullMessage.message, {
           messageId: fullMessage.key.id,
           useCachedGroupMetadata: options.useCachedGroupMetadata,
+          additionalNodes: [
+            ...(Array.isArray(options.additionalNodes) ? options.additionalNodes : []),
+            ...buildNativeFlowRelayNodes(chatId),
+          ],
         }),
         timeoutPromise,
       ]);
