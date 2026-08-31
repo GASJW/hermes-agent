@@ -18,6 +18,34 @@ export function normalizeWhatsAppId(value) {
   return String(value).replace(':', '@');
 }
 
+/**
+ * Resolve a one-to-one WhatsApp LID to the phone JID used for outbound
+ * routing when Baileys has a verified mapping for it.
+ *
+ * WhatsApp can expose the same direct chat as either a linked identity
+ * (`<lid>@lid`) or a phone JID (`<phone>@s.whatsapp.net`).  The session's
+ * mapping is authoritative for this transport conversion only.  Unknown LIDs
+ * and all non-LID destinations remain unchanged so group and special chats do
+ * not get guessed or rewritten.
+ */
+export function resolveOutboundWhatsAppId(value, lidToPhone = {}) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  const at = raw.lastIndexOf('@');
+  if (at <= 0 || raw.slice(at + 1) !== 'lid') {
+    return normalizeWhatsAppId(raw);
+  }
+
+  const lid = raw.slice(0, at).split(':', 1)[0];
+  if (!/^\d+$/.test(lid)) return raw;
+
+  const phone = String(lidToPhone?.[lid] || '').trim();
+  if (!/^\d+$/.test(phone)) return raw;
+
+  return `${phone}@s.whatsapp.net`;
+}
+
 export function getMessageContent(msg) {
   const content = msg?.message || {};
   if (content.ephemeralMessage?.message) return content.ephemeralMessage.message;

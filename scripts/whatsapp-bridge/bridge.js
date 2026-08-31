@@ -47,6 +47,7 @@ import {
   mediaPayloadForFile,
   pollCreationMessageFromPayload,
   pollUpdateForAggregation,
+  resolveOutboundWhatsAppId,
 } from './bridge_helpers.js';
 
 // Parse CLI args
@@ -861,10 +862,11 @@ app.post('/send', async (req, res) => {
     return res.status(503).json({ error: 'Not connected to WhatsApp' });
   }
 
-  const { chatId, message, replyTo, buttons } = req.body;
-  if (!chatId || !message) {
+  const { chatId: requestedChatId, message, replyTo, buttons } = req.body;
+  if (!requestedChatId || !message) {
     return res.status(400).json({ error: 'chatId and message are required' });
   }
+  const chatId = resolveOutboundWhatsAppId(requestedChatId, lidToPhone);
 
   try {
     const chunks = splitLongMessage(formatOutgoingMessage(message));
@@ -941,10 +943,11 @@ app.post('/edit', async (req, res) => {
     return res.status(503).json({ error: 'Not connected to WhatsApp' });
   }
 
-  const { chatId, messageId, message } = req.body;
-  if (!chatId || !messageId || !message) {
+  const { chatId: requestedChatId, messageId, message } = req.body;
+  if (!requestedChatId || !messageId || !message) {
     return res.status(400).json({ error: 'chatId, messageId, and message are required' });
   }
+  const chatId = resolveOutboundWhatsAppId(requestedChatId, lidToPhone);
 
   try {
     const key = { id: messageId, fromMe: true, remoteJid: chatId };
@@ -975,10 +978,11 @@ app.post('/send-media', async (req, res) => {
     return res.status(503).json({ error: 'Not connected to WhatsApp' });
   }
 
-  const { chatId, filePath, mediaType, caption, fileName } = req.body;
-  if (!chatId || !filePath) {
+  const { chatId: requestedChatId, filePath, mediaType, caption, fileName } = req.body;
+  if (!requestedChatId || !filePath) {
     return res.status(400).json({ error: 'chatId and filePath are required' });
   }
+  const chatId = resolveOutboundWhatsAppId(requestedChatId, lidToPhone);
 
   try {
     if (!existsSync(filePath)) {
@@ -1075,10 +1079,11 @@ app.post('/send-poll', async (req, res) => {
     return res.status(503).json({ error: 'Not connected to WhatsApp' });
   }
 
-  const { chatId, question, options, selectableCount } = req.body;
-  if (!chatId || !question || !Array.isArray(options)) {
+  const { chatId: requestedChatId, question, options, selectableCount } = req.body;
+  if (!requestedChatId || !question || !Array.isArray(options)) {
     return res.status(400).json({ error: 'chatId, question, and options are required' });
   }
+  const chatId = resolveOutboundWhatsAppId(requestedChatId, lidToPhone);
 
   try {
     const payload = buildPollPayload({ question, options, selectableCount });
@@ -1097,10 +1102,11 @@ app.post('/send-location', async (req, res) => {
     return res.status(503).json({ error: 'Not connected to WhatsApp' });
   }
 
-  const { chatId, latitude, longitude, name, address } = req.body;
-  if (!chatId || latitude === undefined || longitude === undefined) {
+  const { chatId: requestedChatId, latitude, longitude, name, address } = req.body;
+  if (!requestedChatId || latitude === undefined || longitude === undefined) {
     return res.status(400).json({ error: 'chatId, latitude, and longitude are required' });
   }
+  const chatId = resolveOutboundWhatsAppId(requestedChatId, lidToPhone);
 
   try {
     const payload = buildLocationPayload({ latitude, longitude, name, address });
@@ -1119,8 +1125,9 @@ app.post('/typing', async (req, res) => {
     return res.status(503).json({ error: 'Not connected' });
   }
 
-  const { chatId } = req.body;
-  if (!chatId) return res.status(400).json({ error: 'chatId required' });
+  const { chatId: requestedChatId } = req.body;
+  if (!requestedChatId) return res.status(400).json({ error: 'chatId required' });
+  const chatId = resolveOutboundWhatsAppId(requestedChatId, lidToPhone);
 
   try {
     await sock.sendPresenceUpdate('composing', chatId);

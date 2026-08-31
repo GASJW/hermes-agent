@@ -21,6 +21,7 @@ import {
   buildButtonsSendPayload,
   buildTextSendPayload,
   createBoundedMessageStore,
+  resolveOutboundWhatsAppId,
   appendMediaFailureNote,
   extractBridgeEvent,
   inboundReadReceiptKeys,
@@ -86,6 +87,35 @@ import {
   assert.equal(generated.message.buttonsMessage.buttons.length, 2);
   assert.equal(generated.message.buttonsMessage.contentText, '⚠️ Pantheon precisa da sua decisão');
   console.log('  ✓ installed Baileys serializes the native approval payload');
+}
+
+// -- outbound LID routing -------------------------------------------------
+{
+  const lidToPhone = {
+    '111776557490280': '5514998672306',
+  };
+
+  assert.equal(
+    resolveOutboundWhatsAppId('111776557490280@lid', lidToPhone),
+    '5514998672306@s.whatsapp.net',
+  );
+  assert.equal(
+    resolveOutboundWhatsAppId('111776557490280:7@lid', lidToPhone),
+    '5514998672306@s.whatsapp.net',
+  );
+  assert.equal(
+    resolveOutboundWhatsAppId('5514998672306@s.whatsapp.net', lidToPhone),
+    '5514998672306@s.whatsapp.net',
+  );
+  assert.equal(
+    resolveOutboundWhatsAppId('120363001234567890@g.us', lidToPhone),
+    '120363001234567890@g.us',
+  );
+  assert.equal(
+    resolveOutboundWhatsAppId('999999999999999@lid', lidToPhone),
+    '999999999999999@lid',
+  );
+  console.log('  ✓ outbound mapped LIDs resolve to phone JIDs without changing groups or unknown IDs');
 }
 
 {
