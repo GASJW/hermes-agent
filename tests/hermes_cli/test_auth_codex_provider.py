@@ -52,7 +52,6 @@ def _jwt_with_exp(exp_epoch: int) -> str:
 
 
 
-
 def test_resolve_codex_runtime_credentials_missing_access_token(tmp_path, monkeypatch):
     hermes_home = tmp_path / "hermes"
     _setup_hermes_auth(hermes_home, access_token="")
