@@ -199,7 +199,6 @@ export function buildTextSendPayload(text, { replyTo, messageStore } = {}) {
 }
 
 const APPROVAL_BUTTON_COMMAND = /^(APPROVE|DENY) ([A-Za-z0-9_-]{1,256})$/;
-const NATIVE_FLOW_PRIVACY_TIMESTAMP_OFFSET = 77980457;
 
 /**
  * Return the relay-only nodes required for native-flow rendering.  These
@@ -207,24 +206,15 @@ const NATIVE_FLOW_PRIVACY_TIMESTAMP_OFFSET = 77980457;
  * authority or change the button payload.
  */
 export function buildNativeFlowRelayNodes(chatId, { nowSeconds = Math.floor(Date.now() / 1000) } = {}) {
-  const seconds = Number(nowSeconds);
-  const privacyTimestamp = Number.isFinite(seconds)
-    ? String(Math.max(0, Math.floor(seconds) - NATIVE_FLOW_PRIVACY_TIMESTAMP_OFFSET))
-    : '0';
   const biz = {
     tag: 'biz',
-    attrs: {
-      actual_actors: '2',
-      host_storage: '2',
-      privacy_mode_ts: privacyTimestamp,
-    },
+    attrs: {},
     content: [
       {
         tag: 'interactive',
         attrs: { type: 'native_flow', v: '1' },
         content: [{ tag: 'native_flow', attrs: { v: '9', name: 'mixed' } }],
       },
-      { tag: 'quality_control', attrs: { source_type: 'third_party' } },
     ],
   };
   const normalizedChatId = String(chatId || '');
