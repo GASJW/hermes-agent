@@ -15925,7 +15925,43 @@ def _ws_host_origin_reason(ws: "WebSocket") -> Optional[str]:
         return f"origin_mismatch origin={origin} bound={bound_host}"
 
     if not _is_accepted_host(parsed.netloc, bound_host):
-        return f"origin_mismatch origin={origin} bound={bound_host}"
+        # A loopback-bound dashboard may sit behind an explicitly configured
+        # reverse proxy. Keep the existing loopback allowlist as the first
+        # path, then allow exactly the configured public origin — never a
+        # forwarded header, wildcard, or hostname suffix.
+        def _normalise_http_origin(value: str) -> tuple[str, str, int] | None:
+            try:
+                candidate = urllib.parse.urlsplit(value)
+                if candidate.scheme not in {"http", "https"} or not candidate.hostname:
+                    return None
+                if candidate.username is not None or candidate.password is not None:
+                    return None
+                port = candidate.port
+            except (TypeError, ValueError):
+                return None
+            effective_port = port or (443 if candidate.scheme == "https" else 80)
+            return (
+                candidate.scheme.lower(),
+                candidate.hostname.casefold(),
+                effective_port,
+            )
+
+        configured_public_url = ""
+        try:
+            from hermes_cli.dashboard_auth.prefix import resolve_public_url
+
+            configured_public_url = resolve_public_url()
+        except Exception:
+            # A malformed/unavailable override must preserve the existing
+            # fail-closed loopback behavior.
+            configured_public_url = ""
+
+        if (
+            not configured_public_url
+            or _normalise_http_origin(origin)
+            != _normalise_http_origin(configured_public_url)
+        ):
+            return f"origin_mismatch origin={origin} bound={bound_host}"
     return None
 
 
