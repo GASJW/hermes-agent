@@ -67,7 +67,7 @@ hermes portal info        # 随时查看登录状态和路由信息
 
 
 :::info Codex 说明
-OpenAI Codex 提供商通过设备码（device code）认证——打开一个 URL 并输入验证码。Hermes 将生成的凭据存储在 `~/.hermes/auth.json` 的自有认证存储中，并在存在 `~/.codex/auth.json` 时可导入现有的 Codex CLI 凭据。无需安装 Codex CLI。
+OpenAI Codex 提供商通过设备码（device code）认证——打开一个 URL 并输入验证码。Hermes 将生成的凭据仅存储在自己的 `~/.hermes/auth.json` 中，不会读取或导入 Codex CLI 的认证存储。无需安装 Codex CLI；运行 `hermes setup model` 即可开始 Hermes 的新登录。
 
 如果 token 刷新因终端错误（HTTP 4xx、`invalid_grant`、授权被撤销等）失败，Hermes 会将该刷新 token 标记为失效并停止重试，避免出现大量重复的认证失败。下一次请求会显示类型化的重新认证提示。运行 `hermes auth add openai-codex`（或 `hermes model` → **ChatGPT or Codex Subscription**）开始新的设备码登录；成功交换后隔离状态自动解除。
 :::

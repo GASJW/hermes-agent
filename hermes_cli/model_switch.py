@@ -2987,10 +2987,9 @@ def list_authenticated_providers(
                     has_creds = True
             except Exception as exc:
                 logger.debug("Auth store check failed for %s: %s", pid, exc)
-        # Fallback: check the credential pool with full auto-seeding.
-        # This catches credentials that exist in external stores (e.g.
-        # Codex CLI ~/.codex/auth.json) which _seed_from_singletons()
-        # imports on demand but aren't in the raw auth.json yet.
+        # Fallback: check the Hermes credential pool with full auto-seeding.
+        # External stores are provider-specific; the openai-codex pool is
+        # intentionally seeded only from Hermes-owned auth state.
         if not has_creds:
             try:
                 if _credential_pool_is_usable(hermes_slug):
