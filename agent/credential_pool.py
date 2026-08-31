@@ -2809,12 +2809,11 @@ def _seed_from_singletons(provider: str, entries: List[PooledCredential]) -> Tup
 
         state = _load_provider_state(auth_store, "openai-codex")
         tokens = state.get("tokens") if isinstance(state, dict) else None
-        # Hermes owns its own Codex auth state — we do NOT auto-import from
-        # ~/.codex/auth.json at pool-load time.  OAuth refresh tokens are
+        # Hermes owns its own Codex auth state — we do NOT read or import
+        # ~/.codex/auth.json at pool-load time. OAuth refresh tokens are
         # single-use, so sharing them with Codex CLI / VS Code causes
-        # refresh_token_reused race failures.  Users who want to adopt
-        # existing Codex CLI credentials get a one-time, explicit prompt
-        # via `hermes auth openai-codex`.
+        # refresh_token_reused race failures. Credentials must be established
+        # through Hermes' own setup/authentication flow.
         if isinstance(tokens, dict) and tokens.get("access_token"):
             active_sources.add("device_code")
             custom_label = str(state.get("label") or "").strip()

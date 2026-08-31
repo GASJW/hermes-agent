@@ -5,10 +5,8 @@ Covers:
  - Claude Code fallback (tokens only in ~/.claude/.credentials.json)
  - Negative case (no credentials anywhere)
 
-Note: auto-import from ~/.codex/auth.json was removed in #12360 — Hermes
-now owns its own openai-codex auth state, and users explicitly adopt
-existing Codex CLI tokens via `hermes auth openai-codex`. The old
-"Codex CLI shared file" discovery tests were removed with that change.
+Note: Hermes owns its own openai-codex auth state. The model picker must not
+discover or import credentials from the Codex CLI shared file.
 """
 
 import base64
@@ -35,7 +33,7 @@ def hermes_auth_only_env(tmp_path, monkeypatch):
     hermes_home.mkdir()
 
     monkeypatch.setenv("HERMES_HOME", str(hermes_home))
-    # Point CODEX_HOME to nonexistent dir to prove it's not needed
+    # A Codex CLI auth store is intentionally irrelevant to Hermes.
     monkeypatch.setenv("CODEX_HOME", str(tmp_path / "no_codex"))
 
     (hermes_home / "auth.json").write_text(json.dumps({

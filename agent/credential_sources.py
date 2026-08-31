@@ -294,13 +294,12 @@ def _remove_xai_oauth_device_code(provider: str, removed) -> RemovalResult:
 
 
 def _remove_codex_device_code(provider: str, removed) -> RemovalResult:
-    """Codex tokens live in TWO places: our auth store AND ~/.codex/auth.json.
+    """Clear and suppress Hermes' Codex OAuth source.
 
-    refresh_codex_oauth_pure() writes both every time, so clearing only
-    the Hermes auth store is not enough — _seed_from_singletons() would
-    re-import from ~/.codex/auth.json on the next load_pool() call and
-    the removal would be instantly undone.  We suppress instead of
-    deleting Codex CLI's file, so the Codex CLI itself keeps working.
+    Hermes and the Codex CLI own separate credential stores. This removal
+    step only clears Hermes state and never reads, writes, or deletes the
+    Codex CLI store. Suppression prevents a later Hermes pool load from
+    reseeding the removed Hermes provider entry.
 
     The canonical source name in ``_seed_from_singletons`` is
     ``"device_code"`` (no prefix).  Entries may show up in the pool as
@@ -321,8 +320,8 @@ def _remove_codex_device_code(provider: str, removed) -> RemovalResult:
     suppress_credential_source(provider, "device_code")
     result.hints.extend([
         "Suppressed openai-codex device_code source — it will not be re-seeded.",
-        "Note: Codex CLI credentials still live in ~/.codex/auth.json",
-        "Run `hermes auth add openai-codex` to re-enable if needed.",
+        "Hermes requires a new authentication through its own setup flow.",
+        "Run `hermes setup model` to authenticate openai-codex again if needed.",
     ])
     return result
 
@@ -423,7 +422,7 @@ def _register_all_sources() -> None:
         provider="openai-codex", source_id="device_code",
         match_fn=lambda src: src == "device_code" or src.endswith(":device_code"),
         remove_fn=_remove_codex_device_code,
-        description="auth.json providers.openai-codex + ~/.codex/auth.json",
+        description="Hermes auth.json providers.openai-codex",
     ))
     register(RemovalStep(
         provider="xai-oauth", source_id="device_code",

@@ -4327,9 +4327,10 @@ def _credential_fingerprint(provider: str) -> str:
     except Exception:
         pass
 
-    # External well-known credential file locations
+    # External well-known credential file locations. Codex CLI auth is
+    # intentionally excluded: Hermes must not couple model-cache identity to
+    # a credential store it does not own.
     for path in (
-        _os.path.expanduser("~/.codex/auth.json"),
         _os.path.expanduser("~/.claude/.credentials.json"),
         _os.path.expanduser("~/.config/github-copilot/hosts.json"),
         _os.path.expanduser("~/.minimax/credentials.json"),

@@ -14,7 +14,6 @@ from hermes_cli.auth import (
     PROVIDER_REGISTRY,
     _read_codex_tokens,
     _save_codex_tokens,
-    _import_codex_cli_tokens,
     _login_openai_codex,
     refresh_codex_oauth_pure,
     resolve_codex_runtime_credentials,
@@ -48,7 +47,6 @@ def _jwt_with_exp(exp_epoch: int) -> str:
     payload = {"exp": exp_epoch}
     encoded = base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8")).rstrip(b"=").decode("utf-8")
     return f"h.{encoded}.s"
-
 
 
 
@@ -607,7 +605,6 @@ def _patch_httpx_post(monkeypatch, responses):
             return next(seq)
 
     monkeypatch.setattr("hermes_cli.auth.httpx.Client", lambda *a, **k: _FakeClient())
-
 
 
 
