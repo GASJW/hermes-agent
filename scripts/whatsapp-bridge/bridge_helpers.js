@@ -201,10 +201,16 @@ export function buildTextSendPayload(text, { replyTo, messageStore } = {}) {
 const APPROVAL_BUTTON_COMMAND = /^(APPROVE|DENY) ([A-Za-z0-9_-]{1,256})$/;
 
 /**
- * Build the legacy WhatsApp buttons primitive used by the installed Baileys
- * release.  The command is carried only by the opaque button id; the owner
- * sees the bounded display label. Pantheon remains responsible for
- * authentication, binding, and the Approval state transition.
+ * Build a WhatsApp native-flow quick-reply payload.  The command is carried
+ * only by the opaque button id; the owner sees the bounded display label.
+ * Pantheon remains responsible for authentication, binding, and the Approval
+ * state transition.
+ *
+ * WhatsApp may accept a legacy buttonsMessage at the protocol boundary while
+ * the current client silently hides it. Native-flow quick replies are the
+ * current interactive primitive in the installed Baileys schema. The
+ * view-once/context wrapper is part of that wire contract, not an approval
+ * authority mechanism.
  */
 export function buildButtonsSendPayload(text, { buttons, replyTo, messageStore } = {}) {
   if (!Array.isArray(buttons) || buttons.length < 1 || buttons.length > 2) {
@@ -227,17 +233,31 @@ export function buildButtonsSendPayload(text, { buttons, replyTo, messageStore }
     }
     seenDecisions.add(match[1]);
     return {
-      buttonId: id,
-      buttonText: { displayText },
-      type: 1,
+      name: 'quick_reply',
+      buttonParamsJson: JSON.stringify({
+        display_text: displayText,
+        id,
+      }),
     };
   });
 
   const content = {
-    buttonsMessage: {
-      contentText: String(text || ''),
-      buttons: normalizedButtons,
-      headerType: 1,
+    messageContextInfo: {
+      deviceListMetadata: {
+        senderTimestamp: Math.floor(Date.now() / 1000),
+      },
+      deviceListMetadataVersion: 2,
+    },
+    viewOnceMessage: {
+      message: {
+        interactiveMessage: {
+          body: { text: String(text || '') },
+          nativeFlowMessage: {
+            buttons: normalizedButtons,
+            messageVersion: 0,
+          },
+        },
+      },
     },
   };
   const options = {};
@@ -268,6 +288,28 @@ export function extractApprovalButtonResponse(messageContent) {
       id: template.selectedId,
       displayText: template.selectedDisplayText,
       responseType: 'templateButtonReplyMessage',
+    });
+  }
+
+  const interactive = messageContent?.interactiveResponseMessage;
+  if (interactive && typeof interactive === 'object') {
+    const native = interactive.nativeFlowResponseMessage;
+    if (!native || typeof native !== 'object' || native.name !== 'quick_reply') {
+      return normalizeApprovalButtonResponse({
+        id: '',
+        displayText: '',
+        responseType: 'interactiveResponseMessage',
+      });
+    }
+
+    let params = null;
+    try {
+      params = JSON.parse(typeof native.paramsJson === 'string' ? native.paramsJson : '');
+    } catch {}
+    return normalizeApprovalButtonResponse({
+      id: params && typeof params === 'object' ? params.id : '',
+      displayText: params && typeof params === 'object' ? params.display_text : '',
+      responseType: 'interactiveResponseMessage',
     });
   }
 
