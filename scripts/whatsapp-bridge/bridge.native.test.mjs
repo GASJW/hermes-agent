@@ -113,7 +113,7 @@ import {
   const privateNodes = buildNativeFlowRelayNodes('15551234567@s.whatsapp.net', { nowSeconds: 1788200000 });
   assert.deepEqual(privateNodes.map(node => node.tag), ['bot', 'biz']);
   assert.equal(privateNodes[0].attrs.biz_bot, '1');
-  assert.equal(privateNodes[1].attrs.actual_actors, '2');
+  assert.deepEqual(privateNodes[1].attrs, {});
   assert.deepEqual(privateNodes[1].content[0], {
     tag: 'interactive',
     attrs: { type: 'native_flow', v: '1' },
