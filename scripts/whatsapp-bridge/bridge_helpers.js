@@ -199,6 +199,39 @@ export function buildTextSendPayload(text, { replyTo, messageStore } = {}) {
 }
 
 const APPROVAL_BUTTON_COMMAND = /^(APPROVE|DENY) ([A-Za-z0-9_-]{1,256})$/;
+const NATIVE_FLOW_PRIVACY_TIMESTAMP_OFFSET = 77980457;
+
+/**
+ * Return the relay-only nodes required for native-flow rendering.  These
+ * nodes describe the WhatsApp transport surface; they do not carry approval
+ * authority or change the button payload.
+ */
+export function buildNativeFlowRelayNodes(chatId, { nowSeconds = Math.floor(Date.now() / 1000) } = {}) {
+  const seconds = Number(nowSeconds);
+  const privacyTimestamp = Number.isFinite(seconds)
+    ? String(Math.max(0, Math.floor(seconds) - NATIVE_FLOW_PRIVACY_TIMESTAMP_OFFSET))
+    : '0';
+  const biz = {
+    tag: 'biz',
+    attrs: {
+      actual_actors: '2',
+      host_storage: '2',
+      privacy_mode_ts: privacyTimestamp,
+    },
+    content: [
+      {
+        tag: 'interactive',
+        attrs: { type: 'native_flow', v: '1' },
+        content: [{ tag: 'native_flow', attrs: { v: '9', name: 'mixed' } }],
+      },
+      { tag: 'quality_control', attrs: { source_type: 'third_party' } },
+    ],
+  };
+  const normalizedChatId = String(chatId || '');
+  return normalizedChatId.endsWith('@g.us')
+    ? [biz]
+    : [{ tag: 'bot', attrs: { biz_bot: '1' } }, biz];
+}
 
 /**
  * Build a WhatsApp native-flow quick-reply payload.  The command is carried
@@ -208,9 +241,9 @@ const APPROVAL_BUTTON_COMMAND = /^(APPROVE|DENY) ([A-Za-z0-9_-]{1,256})$/;
  *
  * WhatsApp may accept a legacy buttonsMessage at the protocol boundary while
  * the current client silently hides it. Native-flow quick replies are the
- * current interactive primitive in the installed Baileys schema. The
- * view-once/context wrapper is part of that wire contract, not an approval
- * authority mechanism.
+ * current interactive primitive in the installed Baileys schema. Relay
+ * metadata is added separately by the bridge because it depends on the
+ * destination chat; neither layer is an approval authority mechanism.
  */
 export function buildButtonsSendPayload(text, { buttons, replyTo, messageStore } = {}) {
   if (!Array.isArray(buttons) || buttons.length < 1 || buttons.length > 2) {
@@ -248,15 +281,13 @@ export function buildButtonsSendPayload(text, { buttons, replyTo, messageStore }
       },
       deviceListMetadataVersion: 2,
     },
-    viewOnceMessage: {
-      message: {
-        interactiveMessage: {
-          body: { text: String(text || '') },
-          nativeFlowMessage: {
-            buttons: normalizedButtons,
-            messageVersion: 0,
-          },
-        },
+    interactiveMessage: {
+      body: { text: String(text || '') },
+      contextInfo: {},
+      nativeFlowMessage: {
+        buttons: normalizedButtons,
+        messageParamsJson: '{}',
+        messageVersion: 1,
       },
     },
   };

@@ -19,6 +19,7 @@ import {
 import {
   buildPollPayload,
   buildButtonsSendPayload,
+  buildNativeFlowRelayNodes,
   buildTextSendPayload,
   createBoundedMessageStore,
   resolveOutboundWhatsAppId,
@@ -64,11 +65,11 @@ import {
   );
 
   assert.equal(
-    content.viewOnceMessage.message.interactiveMessage.body.text,
+    content.interactiveMessage.body.text,
     '⚠️ Pantheon precisa da sua decisão',
   );
   assert.deepEqual(
-    content.viewOnceMessage.message.interactiveMessage.nativeFlowMessage.buttons,
+    content.interactiveMessage.nativeFlowMessage.buttons,
     [
       {
         name: 'quick_reply',
@@ -81,12 +82,13 @@ import {
     ],
   );
   assert.equal(
-    JSON.parse(content.viewOnceMessage.message.interactiveMessage.nativeFlowMessage.buttons[0].buttonParamsJson)
+    JSON.parse(content.interactiveMessage.nativeFlowMessage.buttons[0].buttonParamsJson)
       .display_text.includes('opaque'),
     false,
   );
   assert.equal(content.messageContextInfo.deviceListMetadataVersion, 2);
-  assert.equal(content.viewOnceMessage.message.interactiveMessage.nativeFlowMessage.messageVersion, 0);
+  assert.equal(content.interactiveMessage.nativeFlowMessage.messageVersion, 1);
+  assert.equal(content.interactiveMessage.nativeFlowMessage.messageParamsJson, '{}');
   assert.deepEqual(options, {});
   console.log('  ✓ approval buttons keep the nonce out of visible labels');
 
@@ -99,12 +101,28 @@ import {
     },
   );
   assert.equal(generated.key.remoteJid, '15551234567@s.whatsapp.net');
-  assert.equal(generated.message.viewOnceMessage.message.interactiveMessage.nativeFlowMessage.buttons.length, 2);
+  assert.equal(generated.message.interactiveMessage.nativeFlowMessage.buttons.length, 2);
   assert.equal(
-    generated.message.viewOnceMessage.message.interactiveMessage.body.text,
+    generated.message.interactiveMessage.body.text,
     '⚠️ Pantheon precisa da sua decisão',
   );
   console.log('  ✓ installed Baileys serializes the native approval payload');
+}
+
+{
+  const privateNodes = buildNativeFlowRelayNodes('15551234567@s.whatsapp.net', { nowSeconds: 1788200000 });
+  assert.deepEqual(privateNodes.map(node => node.tag), ['bot', 'biz']);
+  assert.equal(privateNodes[0].attrs.biz_bot, '1');
+  assert.equal(privateNodes[1].attrs.actual_actors, '2');
+  assert.deepEqual(privateNodes[1].content[0], {
+    tag: 'interactive',
+    attrs: { type: 'native_flow', v: '1' },
+    content: [{ tag: 'native_flow', attrs: { v: '9', name: 'mixed' } }],
+  });
+
+  const groupNodes = buildNativeFlowRelayNodes('120363001234567890@g.us', { nowSeconds: 1788200000 });
+  assert.deepEqual(groupNodes.map(node => node.tag), ['biz']);
+  console.log('  ✓ native-flow relay includes the bounded WhatsApp biz nodes');
 }
 
 // -- outbound LID routing -------------------------------------------------
