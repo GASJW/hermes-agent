@@ -170,6 +170,94 @@ export function buildTextSendPayload(text, { replyTo, messageStore } = {}) {
   return { content, options };
 }
 
+const APPROVAL_BUTTON_COMMAND = /^(APPROVE|DENY) ([A-Za-z0-9_-]{1,256})$/;
+
+/**
+ * Build the legacy WhatsApp buttons primitive used by the installed Baileys
+ * release.  The command is carried only by the opaque button id; the owner
+ * sees the bounded display label. Pantheon remains responsible for
+ * authentication, binding, and the Approval state transition.
+ */
+export function buildButtonsSendPayload(text, { buttons, replyTo, messageStore } = {}) {
+  if (!Array.isArray(buttons) || buttons.length < 1 || buttons.length > 2) {
+    throw new Error('one or two approval buttons are required');
+  }
+
+  const seenDecisions = new Set();
+  const normalizedButtons = buttons.map((button) => {
+    if (!button || typeof button !== 'object') {
+      throw new Error('approval button must be an object');
+    }
+    const id = typeof button.id === 'string' ? button.id : '';
+    const displayText = typeof button.text === 'string' ? button.text.trim() : '';
+    const match = APPROVAL_BUTTON_COMMAND.exec(id);
+    if (!match || !displayText || displayText.length > 64 || /[\r\n]/.test(displayText)) {
+      throw new Error('approval button has an invalid id or label');
+    }
+    if (seenDecisions.has(match[1])) {
+      throw new Error('approval buttons must contain unique decisions');
+    }
+    seenDecisions.add(match[1]);
+    return {
+      buttonId: id,
+      buttonText: { displayText },
+      type: 1,
+    };
+  });
+
+  const content = {
+    buttonsMessage: {
+      contentText: String(text || ''),
+      buttons: normalizedButtons,
+      headerType: 1,
+    },
+  };
+  const options = {};
+  const quoted = messageStore?.get(replyTo);
+  if (quoted?.key && quoted?.message) options.quoted = quoted;
+  return { content, options };
+}
+
+/**
+ * Extract one approval button response without trusting its display label.
+ * Only the exact command encoded in the button id can become the event body;
+ * malformed/tampered responses are returned with an empty command so the
+ * bridge can fail closed before the model or approval callback sees them.
+ */
+export function extractApprovalButtonResponse(messageContent) {
+  const plain = messageContent?.buttonsResponseMessage;
+  if (plain && typeof plain === 'object') {
+    return normalizeApprovalButtonResponse({
+      id: plain.selectedButtonId,
+      displayText: plain.selectedDisplayText,
+      responseType: 'buttonsResponseMessage',
+    });
+  }
+
+  const template = messageContent?.templateButtonReplyMessage;
+  if (template && typeof template === 'object') {
+    return normalizeApprovalButtonResponse({
+      id: template.selectedId,
+      displayText: template.selectedDisplayText,
+      responseType: 'templateButtonReplyMessage',
+    });
+  }
+
+  return null;
+}
+
+function normalizeApprovalButtonResponse({ id, displayText, responseType }) {
+  const command = typeof id === 'string' ? id : '';
+  const match = APPROVAL_BUTTON_COMMAND.exec(command);
+  return {
+    command: match ? command : '',
+    decision: match ? match[1] : '',
+    displayText: typeof displayText === 'string' ? displayText.slice(0, 64) : '',
+    responseType,
+    valid: !!match,
+  };
+}
+
 export function buildLocationPayload({ latitude, longitude, name, address } = {}) {
   const lat = Number(latitude);
   const lon = Number(longitude);
@@ -197,6 +285,10 @@ function textFromQuotedMessage(quotedMessage) {
   if (quotedMessage.videoMessage?.caption) return quotedMessage.videoMessage.caption;
   if (quotedMessage.documentMessage?.caption) return quotedMessage.documentMessage.caption;
   if (quotedMessage.documentMessage?.fileName) return `[Document: ${quotedMessage.documentMessage.fileName}]`;
+  if (quotedMessage.buttonsMessage?.contentText) return quotedMessage.buttonsMessage.contentText;
+  if (quotedMessage.templateMessage?.hydratedTemplate?.hydratedContentText) {
+    return quotedMessage.templateMessage.hydratedTemplate.hydratedContentText;
+  }
   if (quotedMessage.locationMessage) return formatLocationText(quotedMessage.locationMessage, false);
   if (quotedMessage.contactMessage) return formatContactText(quotedMessage.contactMessage);
   if (quotedMessage.pollCreationMessage) return formatPollText(quotedMessage.pollCreationMessage);
@@ -349,7 +441,17 @@ export async function extractBridgeEvent({
     }
   };
 
-  if (messageContent.conversation) {
+  const approvalButtonResponse = extractApprovalButtonResponse(messageContent);
+  if (approvalButtonResponse) {
+    nativeType = approvalButtonResponse.responseType;
+    nativeMetadata.approvalButton = {
+      decision: approvalButtonResponse.decision,
+      displayText: approvalButtonResponse.displayText,
+      responseType: approvalButtonResponse.responseType,
+      valid: approvalButtonResponse.valid,
+    };
+    body = approvalButtonResponse.command;
+  } else if (messageContent.conversation) {
     body = messageContent.conversation;
     nativeType = 'conversation';
   } else if (messageContent.extendedTextMessage?.text) {
