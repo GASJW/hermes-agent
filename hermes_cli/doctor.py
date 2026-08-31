@@ -1719,16 +1719,8 @@ def run_doctor(args):
             check_warn("OpenAI Codex auth", "(not logged in)")
             if codex_status.get("error"):
                 check_info(codex_status["error"])
-            # Native OAuth uses Hermes' own device-code flow — the Codex CLI is
-            # only needed to import existing tokens from ~/.codex/auth.json.
-            # Attach the hint to the Codex auth row so it doesn't read as
-            # remediation for whichever provider happens to print next (#27975).
-            if not _safe_which("codex"):
-                check_info(
-                    "codex CLI not installed "
-                    "(optional — only required to import tokens "
-                    "from an existing Codex CLI login)"
-                )
+            # Hermes owns this OAuth session. The Codex CLI is deliberately
+            # not consulted and is not required for Hermes authentication.
 
         minimax_status = get_minimax_oauth_auth_status()
         if minimax_status.get("logged_in"):

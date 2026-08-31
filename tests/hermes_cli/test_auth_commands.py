@@ -732,7 +732,7 @@ def test_credential_sources_registry_has_expected_steps():
         "~/.claude/.credentials.json",
         "~/.hermes/.anthropic_oauth.json",
         "auth.json providers.nous",
-        "auth.json providers.openai-codex + ~/.codex/auth.json",
+        "Hermes auth.json providers.openai-codex",
         "auth.json providers.minimax-oauth",
         "~/.qwen/oauth_creds.json",
         "Custom provider config.yaml api_key field",
@@ -797,7 +797,6 @@ def test_auth_remove_copilot_suppresses_all_variants(tmp_path, monkeypatch):
     assert is_source_suppressed("copilot", "env:COPILOT_GITHUB_TOKEN")
     assert is_source_suppressed("copilot", "env:GH_TOKEN")
     assert is_source_suppressed("copilot", "env:GITHUB_TOKEN")
-
 
 def test_auth_remove_env_seeded_dotenv_with_bom_no_shell_hint(tmp_path, monkeypatch, capsys):
     """A Notepad-edited .env carries a UTF-8 BOM. The dotenv-vs-shell

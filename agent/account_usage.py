@@ -616,7 +616,7 @@ def redeem_codex_reset_credit(
     except Exception:
         return CodexResetRedeemResult(
             status="unavailable",
-            message="No Codex credentials available. Run `hermes auth` to sign in with your ChatGPT account.",
+            message="No Hermes Codex credentials available. Run `hermes setup model` to sign in with your ChatGPT account.",
         )
     usage_url, _credits_url, consume_url = _codex_backend_urls(resolved_base_url)
     headers = {
