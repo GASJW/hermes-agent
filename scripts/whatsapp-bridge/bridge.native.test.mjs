@@ -63,15 +63,30 @@ import {
     },
   );
 
-  assert.equal(content.buttonsMessage.contentText, '⚠️ Pantheon precisa da sua decisão');
+  assert.equal(
+    content.viewOnceMessage.message.interactiveMessage.body.text,
+    '⚠️ Pantheon precisa da sua decisão',
+  );
   assert.deepEqual(
-    content.buttonsMessage.buttons,
+    content.viewOnceMessage.message.interactiveMessage.nativeFlowMessage.buttons,
     [
-      { buttonId: 'APPROVE opaque-token-1', buttonText: { displayText: '✅ Aprovar' }, type: 1 },
-      { buttonId: 'DENY opaque-token-1', buttonText: { displayText: '❌ Negar' }, type: 1 },
+      {
+        name: 'quick_reply',
+        buttonParamsJson: '{"display_text":"✅ Aprovar","id":"APPROVE opaque-token-1"}',
+      },
+      {
+        name: 'quick_reply',
+        buttonParamsJson: '{"display_text":"❌ Negar","id":"DENY opaque-token-1"}',
+      },
     ],
   );
-  assert.equal(content.buttonsMessage.buttons[0].buttonText.displayText.includes('opaque'), false);
+  assert.equal(
+    JSON.parse(content.viewOnceMessage.message.interactiveMessage.nativeFlowMessage.buttons[0].buttonParamsJson)
+      .display_text.includes('opaque'),
+    false,
+  );
+  assert.equal(content.messageContextInfo.deviceListMetadataVersion, 2);
+  assert.equal(content.viewOnceMessage.message.interactiveMessage.nativeFlowMessage.messageVersion, 0);
   assert.deepEqual(options, {});
   console.log('  ✓ approval buttons keep the nonce out of visible labels');
 
@@ -84,8 +99,11 @@ import {
     },
   );
   assert.equal(generated.key.remoteJid, '15551234567@s.whatsapp.net');
-  assert.equal(generated.message.buttonsMessage.buttons.length, 2);
-  assert.equal(generated.message.buttonsMessage.contentText, '⚠️ Pantheon precisa da sua decisão');
+  assert.equal(generated.message.viewOnceMessage.message.interactiveMessage.nativeFlowMessage.buttons.length, 2);
+  assert.equal(
+    generated.message.viewOnceMessage.message.interactiveMessage.body.text,
+    '⚠️ Pantheon precisa da sua decisão',
+  );
   console.log('  ✓ installed Baileys serializes the native approval payload');
 }
 
@@ -170,6 +188,88 @@ import {
   assert.equal(event.nativeMetadata.approvalButton.valid, false);
   assert.equal(event.nativeMetadata.approvalButton.decision, '');
   console.log('  ✓ malformed approval button payloads fail closed');
+}
+
+{
+  const event = await extractBridgeEvent({
+    msg: {
+      key: { id: 'interactive-response-1', remoteJid: '15551234567@s.whatsapp.net', fromMe: false },
+      messageTimestamp: 123,
+      message: {
+        interactiveResponseMessage: {
+          nativeFlowResponseMessage: {
+            name: 'quick_reply',
+            paramsJson: JSON.stringify({ display_text: '✅ Aprovar', id: 'APPROVE opaque-token-1' }),
+            version: 3,
+          },
+        },
+      },
+    },
+    chatId: '15551234567@s.whatsapp.net',
+    senderId: '15551234567@s.whatsapp.net',
+    senderNumber: '15551234567',
+  });
+
+  assert.equal(event.body, 'APPROVE opaque-token-1');
+  assert.equal(event.nativeType, 'interactiveResponseMessage');
+  assert.deepEqual(event.nativeMetadata.approvalButton, {
+    decision: 'APPROVE',
+    displayText: '✅ Aprovar',
+    responseType: 'interactiveResponseMessage',
+    valid: true,
+  });
+  console.log('  ✓ native-flow quick replies normalize into the canonical approval command');
+}
+
+{
+  const event = await extractBridgeEvent({
+    msg: {
+      key: { id: 'interactive-response-tampered', remoteJid: '15551234567@s.whatsapp.net', fromMe: false },
+      messageTimestamp: 123,
+      message: {
+        interactiveResponseMessage: {
+          nativeFlowResponseMessage: {
+            name: 'quick_reply',
+            paramsJson: '{"display_text":"✅ Aprovar",',
+            version: 3,
+          },
+        },
+      },
+    },
+    chatId: '15551234567@s.whatsapp.net',
+    senderId: '15551234567@s.whatsapp.net',
+    senderNumber: '15551234567',
+  });
+
+  assert.equal(event.body, '');
+  assert.equal(event.nativeType, 'interactiveResponseMessage');
+  assert.equal(event.nativeMetadata.approvalButton.valid, false);
+  assert.equal(event.nativeMetadata.approvalButton.decision, '');
+  console.log('  ✓ malformed native-flow responses fail closed');
+}
+
+{
+  const event = await extractBridgeEvent({
+    msg: {
+      key: { id: 'interactive-response-wrong-kind', remoteJid: '15551234567@s.whatsapp.net', fromMe: false },
+      messageTimestamp: 123,
+      message: {
+        interactiveResponseMessage: {
+          nativeFlowResponseMessage: {
+            name: 'cta_url',
+            paramsJson: JSON.stringify({ id: 'APPROVE opaque-token-1' }),
+          },
+        },
+      },
+    },
+    chatId: '15551234567@s.whatsapp.net',
+    senderId: '15551234567@s.whatsapp.net',
+    senderNumber: '15551234567',
+  });
+
+  assert.equal(event.body, '');
+  assert.equal(event.nativeMetadata.approvalButton.valid, false);
+  console.log('  ✓ non-quick-reply native actions cannot become approval commands');
 }
 
 // -- quoted outbound text -------------------------------------------------
