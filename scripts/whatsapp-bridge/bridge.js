@@ -7,7 +7,7 @@
  *
  * Endpoints (matches gateway/platforms/whatsapp.py expectations):
  *   GET  /messages       - Long-poll for new incoming messages
- *   POST /send           - Send a message { chatId, message, replyTo? }
+ *   POST /send           - Send a message { chatId, message, replyTo?, buttons? }
  *   POST /edit           - Edit a sent message { chatId, messageId, message }
  *   POST /send-media     - Send media natively { chatId, filePath, mediaType?, caption?, fileName? }
  *   POST /send-location  - Send location pin { chatId, latitude, longitude, name?, address? }
@@ -19,7 +19,7 @@
  *   node bridge.js --port 3000 --session ~/.hermes/whatsapp/session
  */
 
-import { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, downloadMediaMessage, getAggregateVotesInPollMessage, decryptPollVote, getKeyAuthor, jidNormalizedUser } from '@whiskeysockets/baileys';
+import { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, downloadMediaMessage, getAggregateVotesInPollMessage, decryptPollVote, getKeyAuthor, jidNormalizedUser, generateMessageIDV2, generateWAMessageFromContent } from '@whiskeysockets/baileys';
 import express from 'express';
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
@@ -38,6 +38,7 @@ import {
   createReconnectScheduler,
   createVersionResolver,
   buildLocationPayload,
+  buildButtonsSendPayload,
   buildTextSendPayload,
   createBoundedMessageStore,
   extractBridgeEvent,
@@ -156,6 +157,35 @@ function sendWithTimeout(chatId, payload, options = {}, timeoutMs = SEND_TIMEOUT
   );
 }
 
+function sendButtonsWithTimeout(chatId, payload, options = {}, timeoutMs = SEND_TIMEOUT_MS) {
+  return enqueueSend(async () => {
+    let timer;
+    const timeoutPromise = new Promise((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`relayMessage timed out after ${timeoutMs / 1000}s`)),
+        timeoutMs,
+      );
+    });
+    try {
+      const fullMessage = generateWAMessageFromContent(chatId, payload, {
+        ...options,
+        userJid: sock.user?.id,
+        messageId: generateMessageIDV2(sock.user?.id),
+      });
+      await Promise.race([
+        sock.relayMessage(chatId, fullMessage.message, {
+          messageId: fullMessage.key.id,
+          useCachedGroupMetadata: options.useCachedGroupMetadata,
+        }),
+        timeoutPromise,
+      ]);
+      return fullMessage;
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+}
+
 function formatOutgoingMessage(message) {
   // In bot mode, messages come from a different number so the prefix is
   // redundant — the sender identity is already clear.  Only prepend in
@@ -222,6 +252,12 @@ function emitDebugEvent(payload) {
   if (!WHATSAPP_DEBUG) return;
   try {
     console.log(JSON.stringify({ event: 'debug', ...payload }));
+  } catch {}
+}
+
+function emitApprovalDiagnostic(event, details = {}) {
+  try {
+    console.log(JSON.stringify({ event, ...details }));
   } catch {}
 }
 
@@ -825,7 +861,7 @@ app.post('/send', async (req, res) => {
     return res.status(503).json({ error: 'Not connected to WhatsApp' });
   }
 
-  const { chatId, message, replyTo } = req.body;
+  const { chatId, message, replyTo, buttons } = req.body;
   if (!chatId || !message) {
     return res.status(400).json({ error: 'chatId and message are required' });
   }
@@ -833,13 +869,52 @@ app.post('/send', async (req, res) => {
   try {
     const chunks = splitLongMessage(formatOutgoingMessage(message));
     const messageIds = [];
+    const wantsButtons = buttons !== undefined;
+    let interactive = false;
+    let fallbackUsed = false;
+    let interactivePayload = null;
+
+    if (wantsButtons && chunks.length === 1) {
+      try {
+        interactivePayload = buildButtonsSendPayload(chunks[0], {
+          buttons,
+          replyTo,
+          messageStore,
+        });
+      } catch (err) {
+        return res.status(400).json({ error: err.message });
+      }
+    }
+
+    if (wantsButtons && chunks.length !== 1) {
+      fallbackUsed = true;
+      emitApprovalDiagnostic('INTERACTIVE_FALLBACK_USED', { reason: 'message_split' });
+    }
+
     for (let i = 0; i < chunks.length; i += 1) {
-      const { content: payload, options } = buildTextSendPayload(chunks[i], {
+      const sendOptions = {
         chatId,
         replyTo: i === 0 ? replyTo : undefined,
         messageStore,
-      });
-      const sent = await sendWithTimeout(chatId, payload, options);
+      };
+      let sent;
+      if (interactivePayload && i === 0) {
+        const { content: payload, options } = interactivePayload;
+        emitApprovalDiagnostic('INTERACTIVE_SEND_ATTEMPTED', { buttonCount: buttons.length });
+        try {
+          sent = await sendButtonsWithTimeout(chatId, payload, options);
+          interactive = true;
+          emitApprovalDiagnostic('INTERACTIVE_SEND_ACCEPTED', { messageId: sent?.key?.id || '' });
+        } catch (err) {
+          fallbackUsed = true;
+          emitApprovalDiagnostic('INTERACTIVE_FALLBACK_USED', { reason: 'interactive_send_failed' });
+          const fallback = buildTextSendPayload(chunks[i], sendOptions);
+          sent = await sendWithTimeout(chatId, fallback.content, fallback.options);
+        }
+      } else {
+        const fallback = buildTextSendPayload(chunks[i], sendOptions);
+        sent = await sendWithTimeout(chatId, fallback.content, fallback.options);
+      }
       trackSentMessageId(sent);
       messageStore.remember(sent);
       if (sent?.key?.id) messageIds.push(sent.key.id);
@@ -852,6 +927,8 @@ app.post('/send', async (req, res) => {
       success: true,
       messageId: messageIds[messageIds.length - 1],
       messageIds,
+      interactive,
+      fallbackUsed,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -991,9 +1068,8 @@ app.post('/send-media', async (req, res) => {
   }
 });
 
-// Send poll primitive. Approval UX is intentionally not wired here; gateway
-// approvals need text fallback and explicit confirmation semantics above this
-// low-level transport helper.
+// Send poll primitive. Approval UX uses the bounded /send buttons contract;
+// polls remain an independent native WhatsApp primitive.
 app.post('/send-poll', async (req, res) => {
   if (!sock || connectionState !== 'connected') {
     return res.status(503).json({ error: 'Not connected to WhatsApp' });

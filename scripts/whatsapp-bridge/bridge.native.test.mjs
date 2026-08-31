@@ -10,10 +10,15 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { getAggregateVotesInPollMessage } from '@whiskeysockets/baileys';
+import {
+  generateMessageIDV2,
+  generateWAMessageFromContent,
+  getAggregateVotesInPollMessage,
+} from '@whiskeysockets/baileys';
 
 import {
   buildPollPayload,
+  buildButtonsSendPayload,
   buildTextSendPayload,
   createBoundedMessageStore,
   appendMediaFailureNote,
@@ -43,6 +48,98 @@ import {
   assert.equal(receiptKeys[0], groupKey);
   assert.equal(receiptKeys[0].participant, groupKey.participant);
   console.log('  ✓ inbound read receipts preserve the original group message key');
+}
+
+// -- approval buttons ------------------------------------------------------
+{
+  const { content, options } = buildButtonsSendPayload(
+    '⚠️ Pantheon precisa da sua decisão',
+    {
+      buttons: [
+        { id: 'APPROVE opaque-token-1', text: '✅ Aprovar' },
+        { id: 'DENY opaque-token-1', text: '❌ Negar' },
+      ],
+    },
+  );
+
+  assert.equal(content.buttonsMessage.contentText, '⚠️ Pantheon precisa da sua decisão');
+  assert.deepEqual(
+    content.buttonsMessage.buttons,
+    [
+      { buttonId: 'APPROVE opaque-token-1', buttonText: { displayText: '✅ Aprovar' }, type: 1 },
+      { buttonId: 'DENY opaque-token-1', buttonText: { displayText: '❌ Negar' }, type: 1 },
+    ],
+  );
+  assert.equal(content.buttonsMessage.buttons[0].buttonText.displayText.includes('opaque'), false);
+  assert.deepEqual(options, {});
+  console.log('  ✓ approval buttons keep the nonce out of visible labels');
+
+  const generated = generateWAMessageFromContent(
+    '15551234567@s.whatsapp.net',
+    content,
+    {
+      userJid: '15550001111@s.whatsapp.net',
+      messageId: generateMessageIDV2('15550001111@s.whatsapp.net'),
+    },
+  );
+  assert.equal(generated.key.remoteJid, '15551234567@s.whatsapp.net');
+  assert.equal(generated.message.buttonsMessage.buttons.length, 2);
+  assert.equal(generated.message.buttonsMessage.contentText, '⚠️ Pantheon precisa da sua decisão');
+  console.log('  ✓ installed Baileys serializes the native approval payload');
+}
+
+{
+  const event = await extractBridgeEvent({
+    msg: {
+      key: { id: 'button-response-1', remoteJid: '15551234567@s.whatsapp.net', fromMe: false },
+      messageTimestamp: 123,
+      message: {
+        buttonsResponseMessage: {
+          selectedButtonId: 'APPROVE opaque-token-1',
+          selectedDisplayText: '✅ Aprovar',
+          contextInfo: { stanzaId: 'approval-message-1' },
+        },
+      },
+    },
+    chatId: '15551234567@s.whatsapp.net',
+    senderId: '15551234567@s.whatsapp.net',
+    senderNumber: '15551234567',
+  });
+
+  assert.equal(event.body, 'APPROVE opaque-token-1');
+  assert.equal(event.nativeType, 'buttonsResponseMessage');
+  assert.deepEqual(event.nativeMetadata.approvalButton, {
+    decision: 'APPROVE',
+    displayText: '✅ Aprovar',
+    responseType: 'buttonsResponseMessage',
+    valid: true,
+  });
+  assert.equal(event.quotedMessageId, 'approval-message-1');
+  console.log('  ✓ button responses normalize into the canonical approval command');
+}
+
+{
+  const event = await extractBridgeEvent({
+    msg: {
+      key: { id: 'button-response-tampered', remoteJid: '15551234567@s.whatsapp.net', fromMe: false },
+      messageTimestamp: 123,
+      message: {
+        buttonsResponseMessage: {
+          selectedButtonId: 'APPROVE token with invalid spacing',
+          selectedDisplayText: '✅ Aprovar',
+        },
+      },
+    },
+    chatId: '15551234567@s.whatsapp.net',
+    senderId: '15551234567@s.whatsapp.net',
+    senderNumber: '15551234567',
+  });
+
+  assert.equal(event.body, '');
+  assert.equal(event.nativeType, 'buttonsResponseMessage');
+  assert.equal(event.nativeMetadata.approvalButton.valid, false);
+  assert.equal(event.nativeMetadata.approvalButton.decision, '');
+  console.log('  ✓ malformed approval button payloads fail closed');
 }
 
 // -- quoted outbound text -------------------------------------------------
