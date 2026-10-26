@@ -1,0 +1,65 @@
+name: Adaptive Routing Windows Package
+
+on:
+  push:
+    branches:
+      - codex/adaptive-routing-controls-v1
+    paths:
+      - '.github/workflows/adaptive-routing-windows-package.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: adaptive-routing-windows-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package-windows-x64:
+    runs-on: windows-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.2'
+          cache: npm
+      - name: Install locked dependencies
+        shell: pwsh
+        run: npm ci
+      - name: Prepare Electron runtime
+        shell: pwsh
+        run: node scripts/build/electron-runtime.mjs --source .
+      - name: Build Desktop
+        working-directory: apps/desktop
+        shell: pwsh
+        run: npm run build
+      - name: Package Windows app (unsigned, portable)
+        working-directory: apps/desktop
+        shell: pwsh
+        run: npm run builder -- --dir --publish never --win --x64
+      - name: Stage Windows package and shortcut migration
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem 'apps/desktop/release' -Recurse -Filter '*.exe' |
+            Where-Object { $_.Directory.Name -like 'win*unpacked' -and $_.Name -notlike 'elevate*' -and $_.Name -notlike 'Uninstall*' } |
+            Select-Object -First 1
+          if (-not $exe) { throw 'No Windows packaged Hermes executable found' }
+          New-Item -ItemType Directory -Force -Path package | Out-Null
+          Copy-Item -LiteralPath $exe.Directory.FullName -Destination 'package/app' -Recurse
+          Copy-Item -LiteralPath scripts/desktop-adaptive/install-hermes-adaptive.ps1 -Destination package
+          Set-Content -LiteralPath package/BUILD_COMMIT.txt -Value "${{ github.sha }}"
+          Write-Host "App executable: $($exe.Name)"
+      - name: Validate shortcut installer in dry-run mode
+        shell: pwsh
+        run: '& ./package/install-hermes-adaptive.ps1'
+      - name: Upload installable package
+        uses: actions/upload-artifact@v4
+        with:
+          name: hermes-adaptive-windows-x64-${{ github.run_number }}
+          path: package/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 6
