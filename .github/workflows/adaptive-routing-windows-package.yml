@@ -1,11 +1,7 @@
 name: Adaptive Routing Windows Package
 
 on:
-  push:
-    branches:
-      - codex/adaptive-routing-controls-v1
-    paths:
-      - '.github/workflows/adaptive-routing-windows-package.yml'
+  workflow_call:
   workflow_dispatch:
 
 permissions:
