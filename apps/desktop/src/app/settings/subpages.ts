@@ -52,6 +52,7 @@ const SUBPAGE_ICONS: Record<string, IconComponent> = {
   modelAuxiliary: Cpu,
   modelMoa: Users,
   modelFallbacks: Box,
+  modelAdaptiveRouting: GitFork,
   chatBehavior: MessageCircle,
   chatAttachments: FileImage,
   workspaceProjects: FolderOpen,

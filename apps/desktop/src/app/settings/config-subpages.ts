@@ -20,6 +20,7 @@ const CONFIG_SUBPAGE_DEFINITIONS: Record<string, ConfigSubpageDefinition[]> = {
     { id: 'fallbacks', labelKey: 'modelFallbacks', fields: ['fallback_providers'] },
     { id: 'auxiliary', labelKey: 'modelAuxiliary', prefixes: ['auxiliary.'] },
     { id: 'delegation', labelKey: 'advancedDelegation', prefixes: ['delegation.'] },
+    { id: 'adaptive', labelKey: 'modelAdaptiveRouting' },
     { id: 'moa', labelKey: 'modelMoa', prefixes: ['moa.'] }
   ],
   chat: [

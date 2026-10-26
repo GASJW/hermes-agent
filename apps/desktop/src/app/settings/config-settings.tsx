@@ -36,6 +36,7 @@ import { hermesConfigCacheWriter, useHermesConfigRecord } from '../hooks/use-con
 import { useOnProfileSwitch } from '../hooks/use-on-profile-switch'
 import { PanelEmpty } from '../overlays/panel'
 
+import { AdaptiveRoutingSettings } from './adaptive-routing-settings'
 import { ConfigField } from './config-field'
 import { configSubpageForField } from './config-subpages'
 import { DELEGATION_ROUTE_COMPANION_KEY, DelegationRouteRow } from './delegation-route-row'
@@ -397,6 +398,7 @@ function ConfigSettingsInner({
           <ModelSettings onMainModelChanged={onMainModelChanged} scopeProfile={scopeProfile} subpage={subpage} />
         </div>
       )}
+      {activeSectionId === 'model' && subpage === 'adaptive' && <AdaptiveRoutingSettings scopeProfile={scopeProfile} />}
       {children}
       <input
         accept=".json,application/json"
@@ -456,7 +458,8 @@ function ConfigSettingsInner({
     visibleFields.length === 0 &&
     (subpage === undefined
       ? activeSectionId !== 'chat'
-      : !showModelSettings && !showDesktopSettings && !showAttachments && !showSharedMetrics)
+      : !showModelSettings && !showDesktopSettings && !showAttachments && !showSharedMetrics &&
+        !(activeSectionId === 'model' && subpage === 'adaptive'))
 
   return renderPage(
     <>

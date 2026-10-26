@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { useSessionView } from '@/app/chat/session-view'
 import { useTourMarker } from '@/app/chat/tour-marker'
+import { useDelegationRouting } from '@/app/settings/delegation/routing-data'
 import { ModelMenuCloseContext } from '@/app/shell/model-menu-panel'
 import { isElementInHiddenPane } from '@/components/pane-shell/pane-visibility'
 import { Button } from '@/components/ui/button'
@@ -12,11 +13,14 @@ import { GlyphSpinner } from '@/components/ui/glyph-spinner'
 import { releaseTypingFocus } from '@/components/ui/keyboard-first'
 import { Tip } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
+import { isAdaptiveRouting } from '@/lib/adaptive-routing'
 import { ChevronDown } from '@/lib/icons'
 import { formatModelPillLabel, providerDisplayName } from '@/lib/model-status-label'
 import { cn } from '@/lib/utils'
+import { $activeGatewayProfile } from '@/store/profile'
 import { $currentModelSource, setModelPickerOpen } from '@/store/session'
 
+import { AdaptiveRoutingDetails } from './adaptive-routing-details'
 import { useComposerModelPillLabel } from './contrib'
 import { onComposerModelMenuRequest } from './focus'
 import { RICH_INPUT_SLOT } from './rich-editor'
@@ -67,6 +71,7 @@ export function ModelPill({
   const serviceTier = useStore(view.$serviceTier ?? UNKNOWN_TIER)
   const reasoningEffort = useStore(view.$reasoningEffort)
   const modelSource = useStore($currentModelSource)
+  const activeProfile = useStore($activeGatewayProfile)
   const runtimeId = useStore(view.$runtimeId)
   const [open, setOpen] = useState(false)
   const restoreSelection = useRef<(() => void) | null>(null)
@@ -137,7 +142,14 @@ export function ModelPill({
   // A `composer.modelPill` provider may override the LABEL (compact reasoning
   // label, custom naming) — the pill keeps its chrome, pin dot, and menu; only
   // the text changes, and a provider that declines leaves the core label.
-  const pillLabel = useComposerModelPillLabel({ compact, model: currentModel, reasoningEffort: reasoningEffort || '' })
+  // Resumed conversations render in tile views. Their owner profile comes from
+  // the composer scope, not the foreground gateway profile; never relabel a
+  // tile from another profile (or hide Adaptive Routing only for old tabs).
+  const profile = scope.profile || activeProfile
+  const routing = useDelegationRouting(profile)
+  const adaptive = isAdaptiveRouting(profile, currentModel, reasoningEffort || '', currentProvider, routing.data)
+  const contributedLabel = useComposerModelPillLabel({ compact, model: currentModel, reasoningEffort: reasoningEffort || '' })
+  const pillLabel = adaptive ? 'Adaptive Routing' : contributedLabel
 
   const label = compact ? (
     <ChevronDown className="size-3.5 shrink-0 opacity-70" />
@@ -173,7 +185,7 @@ export function ModelPill({
     ? copy.modelTitle(providerDisplayName(currentProvider), currentModel || copy.modelNone)
     : copy.switchModel
 
-  const title = pinnedOverride ? `${baseTitle} — ${copy.modelPinned}` : baseTitle
+  const title = adaptive ? 'Adaptive Routing: rotas de delegação configuradas para este perfil; sem troca automática de modelo por mensagem' : pinnedOverride ? `${baseTitle} — ${copy.modelPinned}` : baseTitle
 
   if (!model.modelMenuContent) {
     return (
@@ -237,6 +249,7 @@ export function ModelPill({
         sideOffset={8}
       >
         <ModelMenuCloseContext.Provider value={() => setMenuOpen(false)}>
+          {adaptive && <AdaptiveRoutingDetails onClose={() => setMenuOpen(false)} profile={profile} />}
           {model.modelMenuContent}
         </ModelMenuCloseContext.Provider>
       </DropdownMenuContent>

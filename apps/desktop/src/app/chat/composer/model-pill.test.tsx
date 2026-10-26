@@ -14,6 +14,19 @@ import { COMPOSER_AREAS, type ComposerModelPillContext, type ComposerModelPillPr
 import { requestModelMenuToggle } from './focus'
 import { ModelPill } from './model-pill'
 import { RICH_INPUT_SLOT } from './rich-editor'
+import { ComposerScopeProvider, MAIN_COMPOSER_SCOPE } from './scope'
+
+// ModelPill consumes owner-scoped routing; isolate UI tests from the API.
+vi.mock('@/app/settings/delegation/routing-data', () => ({
+  useDelegationRouting: (scope: string) => ({
+    data: scope === 'qlik-developer' ? {
+      configured: 'model_map',
+      model_map: { default: 'executor', options: [
+        { name: 'executor', model: 'gpt-6.1-terra', provider: 'codex-cavernaugabuga', reasoning_effort: 'xhigh' }
+      ] }
+    } : null
+  })
+}))
 
 const modelState = (over: Partial<ChatBarState['model']> = {}): ChatBarState['model'] => ({
   canSwitch: true,
@@ -165,6 +178,45 @@ describe('ModelPill per-surface model label', () => {
 
     expect(screen.getByText('Sonnet')).toBeTruthy()
     expect(screen.queryByText(/primary/i)).toBeNull()
+  })
+})
+
+// Adaptive label must follow each tile's owning profile, NOT the foreground global.
+describe('ModelPill Adaptive Routing on resumed sessions', () => {
+  const makeTile = (model: string, effort: string): SessionView => ({
+    kind: 'tile',
+    $awaitingResponse: atom(false), $busy: atom(false), $cwd: atom(''),
+    $fast: atom(false), $lastVisibleIsUser: atom(false), $messages: atom([]),
+    $messagesEmpty: atom(true), $model: atom(model), $provider: atom('codex-cavernaugabuga'),
+    $reasoningEffort: atom(effort), $reasoningEffortPending: atom(false),
+    $reasoningEffortWire: atom(effort), $runtimeId: atom('resumed-runtime'),
+    $storedId: atom('older-conversation'), $turnStartedAt: atom<number | null>(null)
+  })
+
+  it('renders Adaptive Routing for an old tile owned by qlik-developer', () => {
+    const tile = makeTile('gpt-6.1-terra', 'xhigh')
+    render(
+      <SessionViewProvider value={tile}>
+        <ComposerScopeProvider value={{ ...MAIN_COMPOSER_SCOPE, profile: 'qlik-developer', target: 'tile:older-conversation' }}>
+          <ModelPill disabled={false} model={modelState({ model: 'gpt-6.1-terra', provider: 'codex-cavernaugabuga' })} />
+        </ComposerScopeProvider>
+      </SessionViewProvider>
+    )
+    expect(screen.getByText('Adaptive Routing')).toBeTruthy()
+  })
+  it('does not relabel unrelated tile profiles or a different model', () => {
+    for (const [profile, model] of [['vps-operator','gpt-6-luna'], ['qlik-developer','gpt-6.1-sol']]) {
+      const { unmount } = render(
+        <SessionViewProvider value={makeTile(model, 'xhigh')}>
+          <ComposerScopeProvider value={{ ...MAIN_COMPOSER_SCOPE, profile, target: 'tile:older-conversation' }}>
+            <ModelPill disabled={false} model={modelState({ model, provider: 'codex-cavernaugabuga' })} />
+          </ComposerScopeProvider>
+        </SessionViewProvider>
+      )
+
+      expect(screen.queryByText('Adaptive Routing')).toBeNull()
+      unmount()
+    }
   })
 })
 

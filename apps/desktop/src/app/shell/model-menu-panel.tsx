@@ -4,11 +4,13 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 
 import { useSessionView } from '@/app/chat/session-view'
+import { useDelegationRouting } from '@/app/settings/delegation/routing-data'
 import { Codicon } from '@/components/ui/codicon'
 import { DropdownMenuItem, dropdownMenuRow } from '@/components/ui/dropdown-menu'
 import { useI18n } from '@/i18n'
 import { modelOptionsQueryKey, requestModelOptions } from '@/lib/model-options'
 import { cn } from '@/lib/utils'
+import { notifyError } from '@/store/notifications'
 import { $currentModelSource } from '@/store/session'
 
 import { LocalSetupMenuRow } from './local-setup-menu-row'
@@ -39,6 +41,13 @@ export function ModelMenuPanel({ onFollowDefaultModel, ...props }: ModelMenuPane
   // Same condition as the pill's pin dot: a draft whose next session.create
   // ships the manual pick instead of the Settings default (#107410).
   const pinnedDraft = view.kind === 'primary' && !activeSessionId && modelSource === 'manual'
+  const routing = useDelegationRouting(profile)
+
+  const configuredExecutor = routing.data?.model_map.options.find(
+    route => route.name === routing.data?.model_map.default
+  )
+
+  const adaptiveAvailable = routing.data?.configured === 'model_map' && Boolean(configuredExecutor)
 
   // Explicit "Refresh Models": re-fetch the catalog with refresh:true so the
   // backend busts its 1h provider-model disk cache and re-pulls each provider's
@@ -79,6 +88,33 @@ export function ModelMenuPanel({ onFollowDefaultModel, ...props }: ModelMenuPane
       controller={controller}
       footer={
         <>
+          {adaptiveAvailable && configuredExecutor && (
+            <DropdownMenuItem
+              className={cn(dropdownMenuRow, 'text-(--ui-text-primary)')}
+              onSelect={() => {
+                void (async () => {
+                  try {
+                    const switched = await controller.select(configuredExecutor.model, configuredExecutor.provider ?? '')
+
+                    if (switched === false) {
+                      return
+                    }
+
+                    controller.applyPreset(
+                      { effort: configuredExecutor.reasoning_effort ?? 'medium' },
+                      { model: configuredExecutor.model, provider: configuredExecutor.provider ?? '' }
+                    )
+                  } catch (error) {
+                    notifyError(error, 'Não foi possível selecionar o executor configurado do Adaptive Routing.')
+                  }
+                })()
+              }}
+              title={`Usar executor configurado neste perfil: ${configuredExecutor.model} · ${configuredExecutor.reasoning_effort ?? 'herdado'}. Delegações respeitam a política do perfil.`}
+            >
+              <Codicon name="git-compare" size="0.75rem" />
+              Adaptive Routing · {configuredExecutor.model} · {configuredExecutor.reasoning_effort ?? 'herdado'}
+            </DropdownMenuItem>
+          )}
           {pinnedDraft && onFollowDefaultModel && (
             <DropdownMenuItem
               className={cn(dropdownMenuRow, 'text-(--ui-text-tertiary)')}

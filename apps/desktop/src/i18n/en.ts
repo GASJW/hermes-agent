@@ -690,6 +690,7 @@ export const en: Translations = {
       modelAuxiliary: 'Auxiliary models',
       modelMoa: 'Mixture of Agents',
       modelFallbacks: 'Fallback models',
+      modelAdaptiveRouting: 'Adaptive Routing',
       chatBehavior: 'Behavior',
       chatAttachments: 'Attachments',
       workspaceProjects: 'Projects & discovery',
