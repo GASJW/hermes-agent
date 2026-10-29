@@ -689,7 +689,12 @@ def _spawn_gateway_restart(profile: Optional[str] = None, *, interrupt: bool = F
     # ``interrupt``: ``POST /api/gateway/restart`` is the user-commanded force path that supersedes a
     # drain (D6 of the safe-shutdown plan, 19b26244046); a config-save auto-restart is not, and its
     # child refuses while sessions are live.
-    subcommand = _gateway_mod._gateway_subcommand(profile, "restart") + ["--interrupt"] * interrupt
+    # Dashboard actions must be bounded clients. On an unmanaged Linux host,
+    # gateway restart WITHOUT --detach becomes the long-lived gateway process;
+    # its action status remains "running" forever even after the gateway boots.
+    # --detach is harmless for supervised service-manager restarts and makes
+    # the manual fallback hand off to an independent daemon before exiting.
+    subcommand = _gateway_mod._gateway_subcommand(profile, "restart") + ["--interrupt"] * interrupt + ["--detach"]
     existing = _gateway_mod._ACTION_PROCS.get("gateway-restart")
     if existing is not None and existing.poll() is None:
         existing_command = _gateway_mod._ACTION_COMMANDS.get("gateway-restart")
