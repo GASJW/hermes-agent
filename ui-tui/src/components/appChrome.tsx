@@ -15,6 +15,7 @@ import { VERBS } from '../content/verbs.js'
 import { fmtDuration } from '../domain/messages.js'
 import { stickyPromptFromViewport } from '../domain/viewport.js'
 import { messages, t as tr } from '../i18n/runtime.js'
+import { adaptiveRoutingLabel } from '../lib/adaptiveRouting.js'
 import { buildSubagentTree, treeTotals, widthByDepth } from '../lib/subagentTree.js'
 import { useScrollbarSnapshot, useViewportSnapshot } from '../lib/viewportStore.js'
 import type { Theme } from '../theme.js'
@@ -544,6 +545,7 @@ export function StatusRule({
   modelFast,
   modelReasoningEffort,
   modelReasoningEffortWire,
+  modelProfile,
   indicatorStyle = 'kaomoji',
   notice,
   usage,
@@ -582,7 +584,7 @@ export function StatusRule({
       : ''
 
   const bar = !segs.compactCtx && usage.context_max && ok('context_pct') ? ctxBar(pct) : ''
-  const modelText = modelLabel(model, modelReasoningEffort, modelFast, modelReasoningEffortWire)
+  const modelText = adaptiveRoutingLabel(modelProfile, model, modelReasoningEffort) ?? modelLabel(model, modelReasoningEffort, modelFast, modelReasoningEffortWire)
 
   // Battery read-out — the first (pinned) status-bar element when enabled.
   const showBattery = !!battery && battery.available && battery.percent != null && ok('battery')
@@ -1001,6 +1003,7 @@ interface StatusRuleProps {
   modelFast?: boolean
   modelReasoningEffort?: string
   modelReasoningEffortWire?: string
+  modelProfile?: string | null
   indicatorStyle?: IndicatorStyle
   notice?: Notice | null
   sessionStartedAt?: null | number

@@ -1,21 +1,10 @@
-import type { DelegationRouting } from '@/api/delegation'
+export const ADAPTIVE_PROFILE = 'qlik-developer'
+export const ADAPTIVE_MODEL = 'gpt-6.1-terra'
+export const ADAPTIVE_PROVIDER = 'codex-cavernaugabuga'
 
-/** Show Adaptive Routing only when THIS profile has an active route map.
- * The chosen model/effort/provider must correspond to its default executor. */
-export function isAdaptiveRouting(
-  profile: string,
-  model: string,
-  effort: string,
-  provider?: string,
-  routing?: DelegationRouting | null
-): boolean {
-  if (!profile || routing?.configured !== 'model_map') {return false}
-  const route = routing.model_map.options.find(option => option.name === routing.model_map.default)
-
-  if (!route) {return false}
-  const selected = model.split('/').at(-1)?.toLowerCase() ?? ''
-
-  return selected === route.model.toLowerCase() &&
-    effort.toLowerCase() === (route.reasoning_effort ?? '').toLowerCase() &&
-    (!provider || provider === route.provider)
+/** Qlik Developer UI mode: real parent Terra XHigh, governed delegation via Jev. */
+export function isAdaptiveRouting(profile: string, model: string, effort: string): boolean {
+  return profile === ADAPTIVE_PROFILE &&
+    model.split('/').at(-1)?.toLowerCase() === ADAPTIVE_MODEL &&
+    effort.toLowerCase() === 'xhigh'
 }

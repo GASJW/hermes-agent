@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react'
 
 import { useSessionView } from '@/app/chat/session-view'
 import { useTourMarker } from '@/app/chat/tour-marker'
-import { useDelegationRouting } from '@/app/settings/delegation/routing-data'
 import { ModelMenuCloseContext } from '@/app/shell/model-menu-panel'
 import { isElementInHiddenPane } from '@/components/pane-shell/pane-visibility'
 import { Button } from '@/components/ui/button'
@@ -20,7 +19,6 @@ import { cn } from '@/lib/utils'
 import { $activeGatewayProfile } from '@/store/profile'
 import { $currentModelSource, setModelPickerOpen } from '@/store/session'
 
-import { AdaptiveRoutingDetails } from './adaptive-routing-details'
 import { useComposerModelPillLabel } from './contrib'
 import { onComposerModelMenuRequest } from './focus'
 import { RICH_INPUT_SLOT } from './rich-editor'
@@ -145,9 +143,7 @@ export function ModelPill({
   // Resumed conversations render in tile views. Their owner profile comes from
   // the composer scope, not the foreground gateway profile; never relabel a
   // tile from another profile (or hide Adaptive Routing only for old tabs).
-  const profile = scope.profile || activeProfile
-  const routing = useDelegationRouting(profile)
-  const adaptive = isAdaptiveRouting(profile, currentModel, reasoningEffort || '', currentProvider, routing.data)
+  const adaptive = isAdaptiveRouting(scope.profile || activeProfile, currentModel, reasoningEffort || '')
   const contributedLabel = useComposerModelPillLabel({ compact, model: currentModel, reasoningEffort: reasoningEffort || '' })
   const pillLabel = adaptive ? 'Adaptive Routing' : contributedLabel
 
@@ -185,7 +181,7 @@ export function ModelPill({
     ? copy.modelTitle(providerDisplayName(currentProvider), currentModel || copy.modelNone)
     : copy.switchModel
 
-  const title = adaptive ? 'Adaptive Routing: rotas de delegação configuradas para este perfil; sem troca automática de modelo por mensagem' : pinnedOverride ? `${baseTitle} — ${copy.modelPinned}` : baseTitle
+  const title = adaptive ? 'Adaptive Routing: Terra XHigh parent + Jev / Handoff; delegation is governed, not an automatic per-turn model switch' : pinnedOverride ? `${baseTitle} — ${copy.modelPinned}` : baseTitle
 
   if (!model.modelMenuContent) {
     return (
@@ -249,7 +245,6 @@ export function ModelPill({
         sideOffset={8}
       >
         <ModelMenuCloseContext.Provider value={() => setMenuOpen(false)}>
-          {adaptive && <AdaptiveRoutingDetails onClose={() => setMenuOpen(false)} profile={profile} />}
           {model.modelMenuContent}
         </ModelMenuCloseContext.Provider>
       </DropdownMenuContent>

@@ -38,6 +38,7 @@ import { ReasoningPicker } from '@/components/ReasoningPicker'
 import { GatewayClient, type ConnectionState } from '@/lib/gatewayClient'
 import { EventsFeedClient } from '@/lib/eventsFeedClient'
 import { api } from '@/lib/api'
+import { isQlikAdaptiveRouting, QLIK_ADAPTIVE_MODEL, QLIK_ADAPTIVE_PROVIDER } from '@/lib/adaptive-routing'
 import {
   EVENTS_MAX_RECONNECT_ATTEMPTS,
   eventsGaveUpMessage,
@@ -537,7 +538,8 @@ export function ChatSidebar({
   // the fallback until the PTY has broadcast a runtime identity (fresh chat,
   // events feed still connecting).
   const modelName = runtimeModel || effectiveModel || info.model || '—'
-  const modelLabel = modelName.split('/').slice(-1)[0] ?? '—'
+  const adaptiveMode = isQlikAdaptiveRouting(profile, modelName)
+  const modelLabel = adaptiveMode ? 'Adaptive Routing' : (modelName.split('/').slice(-1)[0] ?? '—')
   const credential = credentialWarning(info.credential_warning)
   const banner = error ?? credential?.message ?? null
   const showReload = isEventsAuthRejectionMessage(error)
@@ -562,7 +564,7 @@ export function ChatSidebar({
               'self-start normal-case tracking-normal text-sm font-medium',
               'hover:underline disabled:no-underline'
             )}
-            title={modelName === '—' ? 'switch model' : modelName}
+            title={adaptiveMode ? 'Adaptive Routing: Terra XHigh parent, Jev triage + governed delegation (not automatic per-turn switching)' : modelName === '—' ? 'switch model' : modelName}
           >
             <span className="flex min-w-0 max-w-full items-center gap-1">
               <span className="truncate">{modelLabel}</span>
@@ -572,6 +574,35 @@ export function ChatSidebar({
           </Button>
         </div>
 
+        {profile === 'qlik-developer' && !adaptiveMode && (
+          <Button
+            ghost
+            size="sm"
+            disabled={pendingReloadModel !== null}
+            onClick={() => {
+              void (async () => {
+                try {
+                  setModelNotice(null)
+                  const result = await api.setModelAssignment(
+                    { scope: 'main', provider: QLIK_ADAPTIVE_PROVIDER, model: QLIK_ADAPTIVE_MODEL },
+                    profile
+                  )
+                  if (result.confirm_required) {
+                    setModelNotice('Model switch requires confirmation; choose Terra XHigh in the model picker.')
+                    return
+                  }
+                  refreshEffectiveModel()
+                  setPendingReloadModel('Adaptive Routing (Terra XHigh)')
+                } catch {
+                  setModelNotice('Could not enable Adaptive Routing. The existing model is unchanged.')
+                }
+              })()
+            }}
+            title="Select the existing Qlik Developer routing workflow (Terra XHigh + Jev and handoff), then reload the chat"
+          >
+            Adaptive Routing
+          </Button>
+        )}
         <Badge tone={STATE_TONE[state]} className="shrink-0">
           {STATE_LABEL[state]}
         </Badge>
