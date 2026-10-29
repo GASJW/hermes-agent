@@ -5,6 +5,7 @@ import unicodeSpinners from 'unicode-animations'
 
 import { artWidth, caduceus, CADUCEUS_WIDTH, logo, LOGO_WIDTH } from '../banner.js'
 import { useT } from '../i18n/useT.js'
+import { adaptiveRoutingLabel } from '../lib/adaptiveRouting.js'
 import { flat } from '../lib/text.js'
 import type { Theme } from '../theme.js'
 import type { PanelSection, SessionInfo } from '../types.js'
@@ -370,7 +371,7 @@ export function SessionPanel({ info, maxWidth, sid, t }: SessionPanelProps) {
       <Text />
 
       <Text color={t.color.accent}>
-        {(info.model ?? '').split('/').pop()}
+        {adaptiveRoutingLabel(info.profile_name, info.model ?? '', info.reasoning_effort) ?? (info.model ?? '').split('/').pop()}
         <Text color={t.color.muted}> · Nous Research</Text>
       </Text>
 
@@ -402,7 +403,7 @@ export function SessionPanel({ info, maxWidth, sid, t }: SessionPanelProps) {
         // here so they aren't lost.
         <Box flexDirection="column" marginBottom={1}>
           <Text color={t.color.accent} wrap="truncate-end">
-            {(info.model ?? '').split('/').pop()}
+            {adaptiveRoutingLabel(info.profile_name, info.model ?? '', info.reasoning_effort) ?? (info.model ?? '').split('/').pop()}
             <Text color={t.color.muted}> · Nous Research</Text>
           </Text>
           <Text color={t.color.muted} wrap="truncate-end">

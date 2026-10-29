@@ -16,18 +16,6 @@ import { ModelPill } from './model-pill'
 import { RICH_INPUT_SLOT } from './rich-editor'
 import { ComposerScopeProvider, MAIN_COMPOSER_SCOPE } from './scope'
 
-// ModelPill consumes owner-scoped routing; isolate UI tests from the API.
-vi.mock('@/app/settings/delegation/routing-data', () => ({
-  useDelegationRouting: (scope: string) => ({
-    data: scope === 'qlik-developer' ? {
-      configured: 'model_map',
-      model_map: { default: 'executor', options: [
-        { name: 'executor', model: 'gpt-6.1-terra', provider: 'codex-cavernaugabuga', reasoning_effort: 'xhigh' }
-      ] }
-    } : null
-  })
-}))
-
 const modelState = (over: Partial<ChatBarState['model']> = {}): ChatBarState['model'] => ({
   canSwitch: true,
   model: 'gpt-6',
@@ -204,8 +192,8 @@ describe('ModelPill Adaptive Routing on resumed sessions', () => {
     )
     expect(screen.getByText('Adaptive Routing')).toBeTruthy()
   })
-  it('does not relabel unrelated tile profiles or a different model', () => {
-    for (const [profile, model] of [['vps-operator','gpt-6-luna'], ['qlik-developer','gpt-6.1-sol']]) {
+  it('does not relabel unrelated tile profiles or non-Terra model', () => {
+    for (const [profile, model] of [['vps-operator','gpt-6.1-terra'], ['qlik-developer','gpt-6.1-sol']]) {
       const { unmount } = render(
         <SessionViewProvider value={makeTile(model, 'xhigh')}>
           <ComposerScopeProvider value={{ ...MAIN_COMPOSER_SCOPE, profile, target: 'tile:older-conversation' }}>
